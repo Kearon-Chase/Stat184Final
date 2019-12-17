@@ -1,0 +1,92 @@
+---
+title: "Final Project"
+author: "Kearon Chase"
+date: "Due: 12/17/2019"
+output: html_document
+---
+## How does player position and performance affect team success?
+```{r}
+library(DataComputing)
+library(party)
+library(partykit)
+```
+```{r}
+tbl <- read.csv(file = 'nba.csv')
+tbl2 <- read.csv(file = 'nba_extra.csv')
+head(tbl)
+head(tbl2)
+```
+This steps loads the csv data sources and inspects the first 5 entries
+```{r}
+new_tbl <- 
+  tbl %>% 
+  select(Player, Pos, Age, PER, TS., X3PAr, BPM, USG., OWS) %>% 
+  left_join(tbl2  %>% select(c("Player", "MP", "FG", "X3P.", "X2P.", "eFG.", "PTS", "TOV", "BLK", "ORB")), by = c("Player" = "Player"))
+head(new_tbl)
+```
+This code joins the two data sources, selecting column that are related to my research question and could be used.
+
+```{r}
+target <- c("PG", "SG", "SF", "PF", "C")
+new_tbl<-new_tbl %>%
+  filter(Pos %in% target)
+
+total_pos <- new_tbl %>% 
+  group_by(Pos) %>%
+  summarise(total = n())
+head(total_pos)
+
+non_guards <- new_tbl %>%
+  group_by(Pos) %>%
+  filter(grepl("[^G]$", Pos))
+#head(non_guards)
+
+guards <- new_tbl %>%
+  group_by(Pos) %>%
+  filter(grepl("[G]$", Pos))
+#head(non_guards)
+
+prime_talent_guards <- guards %>%
+  group_by(Age) %>%
+  filter(19<Age) %>%
+  filter(Age <= 33)
+head(prime_talent_guards)
+
+non_guard_prime_talent <- non_guards %>%
+  group_by(Age) %>%
+  filter(19<Age) %>%
+  filter(Age <= 33)
+head(non_guard_prime_talent)
+```
+What I am doing here is first filtering the original table to eliminate players with multiple positions because some of these people are re-listed. Secondly, i gathered the total number of players represented for each position. This allowed me to see if any position was being misrepresented with a low sample size. This ended up not being the case as the distribution of postions is relativley normal. Next, i used regular expressions to create a table of only non-guards. I did this because guards are often the most popular positions that general basektball fans are enamoured with and create many false-narratives about guards being the mosts important to championship success. Additionally, because guards tend to have the ball in there hands the most, they will skew the averages so this counteracts that. Laastly, i created the two tables i wil use mostly throughout this evaluation by filtering players younger than 20 and older than 33 because they are historically unproductive, with the exception of players like Lebron James, Kevin Durant, and players of that caliber.
+
+```{r}
+usg_ows_ng<-ggplot(data=non_guard_prime_talent,aes(x=USG.,y=OWS))+geom_point()+aes(colour=Pos)+facet_wrap(~Age,ncol=4) + geom_vline(xintercept = 15)
+usg_ows_g<- ggplot(data=prime_talent_guards,aes(x=USG.,y=OWS))+geom_point()+aes(colour=Pos)+facet_wrap(~Age,ncol=4) + geom_vline(xintercept = 15)
+
+g_ts_pm <- ggplot(data=prime_talent_guards,aes(x=TS.,y=BPM))+geom_point() + geom_hline(yintercept = 0)
+ng_or_ows <- ggplot(data=non_guard_prime_talent,aes(x=ORB,y=OWS))+geom_point() 
+
+usg_ows_ng
+usg_ows_g
+g_ts_pm
+ng_or_ows
+```
+In this chunk code i analyze how the player performance affects the outcome of a game. First we look at how usage affects offensive wins shared(ows), a stat that see how players offensive performance affects the outcome of a game, and we can see in the non_guard case players aged from 23-27 have are postive relationship with usage and ows. For guards from 24-31, with the exception of year 26 and 30, there seems to be a strong correlation. This is what we see in real-life as these are actually considered the prime years for these positions so it is no suprise to me that this is the case. 
+Next we explore the relationship between true shooting percentage (the best indicator of how good of  a shooter a player as it takes into account all three shooting level: 3-pt shooting, 2pt shooting, and free throw shooting) and plus-minus, the net amount of points scored while a player is playing (a players team scoring is postive and the opponent scoring is negative). The reason i dont use plus-minus as the defacto stat to measure player impact is because basektball is in essence a team sport so great players on a bad team will have a bad plus-minus, but nonetheless it is a decent indicator to use for one-off analysis. 
+Last we see how non guard offensive rebounding affects the ows. I use this statistic because offensive rebounding is the most important stat to success in my opinion because it limits the possesions of an opponent while increased possesions for a players team. As expected the more offensive rebounds a non-guard gets (non-guards do the most rebounding as this is often there designated job which is why i dont bother to inspect guards as they typically rebound offensivley very low) increased their ows.
+I used vlines on usage because the average nba usage rate is 15, and hline on bpm beause 0 indicates nothing changed when the player was on the court.
+```{r}
+ng_tree <- non_guard_prime_talent %>%
+  filter(MP >= 1000) %>%
+  ctree(OWS  ~ Age+ Pos+ ORB+ BLK+ PTS+TS., data = .)
+g_tree <- prime_talent_guards %>%
+  filter(MP >= 1000) %>%
+  ctree(OWS  ~ Age+ Pos+PTS+TOV+X3P.+TS., data = .)
+ng_tree
+g_tree
+```
+
+Finally I use decisions trees to show how wins shared are affected by the most relevant stats related to position categorization.
+
+In conclusion, it seems like player position doesn't affect win outcome as each position has a speific job on the court. When looking at positions individually it is clear that player performance directly affects wins. 
